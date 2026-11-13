@@ -1,0 +1,35 @@
+{
+  "_kommentar": "auth.password, auth.secret_key och export.db_password ska vara base64-kodade. Skapa med: nessus_cli.py --encode-secret. export.template_id: rapportmall för html/pdf, id eller namn (lista med -R), null = använd chapters",
+  "url": "https://nessus.example.local:8834",
+  "verify_ssl": true,
+  "ca_bundle": null,
+  "timeout": 60,
+  "auth": {
+    "method": "session",
+    "access_key": "",
+    "secret_key": "",
+    "username": "apiuser",
+    "password": "Q2hhbmdlTWUh",
+    "use_api_token": null,
+    "api_token": null
+  },
+  "scan_defaults": {
+    "template": "basic",
+    "folder": "My Scans",
+    "poll_interval": 30,
+    "max_wait_minutes": 720
+  },
+  "export": {
+    "output_dir": "./reports",
+    "default_formats": [
+      "csv",
+      "html"
+    ],
+    "chapters": "vuln_hosts_summary;vuln_by_host;remediations",
+    "template_id": null,
+    "db_password": "",
+    "poll_interval": 3,
+    "timeout_seconds": 900,
+    "extra": {}
+  }
+}
