@@ -134,3 +134,6 @@ Filnamn: `<scannamn>_<scanid>_h<historyid>_<tidsstämpel>.<ext>`.
 - Scannamn avgörs med `-g/--folder` vid dubbletter, papperskorgen exkluderas (v2.0.2)
 - X-API-Token söks även i andra JS-filer och saknad token stoppar inte längre körningen (v2.0.1)
 - Fix: `REQUESTS_CA_BUNDLE`/`CURL_CA_BUNDLE` i miljön skrev över `verify_ssl`/`ca_bundle`
+
+## Licens
+MIT – se [LICENSE](LICENSE). Programvaran levereras i befintligt skick, utan garantier.

@@ -8,7 +8,8 @@
 # Senast ändrad: 2026-11-12
 # Kräver:       Python 3.6+, requests 2.20+ (cryptography valfritt)
 # Testad mot:   Nessus Professional 10.12
-# Repo:         https://github.com/lniklasson/nessus_cli (privat)
+# Repo:         https://github.com/lniklasson/nessus_cli
+# Licens:       MIT (se LICENSE)
 #
 # Ändringslogg:
 #   2.1.0  2026-11-12  -e/--report-template (id eller namn), tydligare -R,
