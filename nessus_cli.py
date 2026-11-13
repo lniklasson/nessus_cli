@@ -1,49 +1,50 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # =============================================================================
-# Namn:         nessus_cli.py
-# Beskrivning:  All-round CLI för Nessus Professional REST-API
-# Författare:   Lars Niklasson
-# Version:      2.1.0
-# Senast ändrad: 2026-11-12
-# Kräver:       Python 3.6+, requests 2.20+ (cryptography valfritt)
-# Testad mot:   Nessus Professional 10.12
-# Repo:         https://github.com/lniklasson/nessus_cli
-# Licens:       MIT (se LICENSE)
+# Name:          nessus_cli.py
+# Description:   All-round CLI for the Nessus Professional REST API
+# Author:        Lars Niklasson
+# Version:       2.2.0
+# Last modified: 2026-11-13
+# Requires:      Python 3.6+, requests 2.20+ (cryptography optional)
+# Tested with:   Nessus Professional 10.12
+# Repo:          https://github.com/lniklasson/nessus_cli
+# License:       MIT (see LICENSE)
 #
-# Ändringslogg:
-#   2.1.0  2026-11-12  -e/--report-template (id eller namn), tydligare -R,
-#                      mallnamn tillåtet i export.template_id
-#   2.0.3              Kompatibel med Python 3.6 (SLES 15, RHEL 8 m.fl.)
-#   2.0.2              Scannamn avgörs med -g/--folder vid dubbletter,
-#                      papperskorgen exkluderas vid namnuppslag
-#   2.0.1              X-API-Token söks även i andra JS-filer; saknad token
-#                      stoppar inte längre körningen
-#   2.0.0              Optioner istället för underkommandon (-X/--xxx),
+# Changelog:
+#   2.2.0  2026-11-13  All output, help texts, comments and docs in English
+#   2.1.0  2026-11-12  -e/--report-template (id or name), clearer -R,
+#                      template name allowed in export.template_id
+#   2.0.3              Compatible with Python 3.6 (SLES 15, RHEL 8 etc.)
+#   2.0.2              Duplicate scan names resolved with -g/--folder,
+#                      trash folder excluded from name lookups
+#   2.0.1              X-API-Token also searched for in other JS files;
+#                      a missing token no longer stops the run
+#   2.0.0              Options instead of subcommands (-X/--xxx),
 #                      --check-connection, --list-scans, --encode-secret,
-#                      base64 för hemligheter, --debug (ersätter -v),
+#                      base64 for secrets, --debug (replaces -v),
 #                      default auth.method = session.
-#                      Fix: REQUESTS_CA_BUNDLE/CURL_CA_BUNDLE skrev över
+#                      Fix: REQUESTS_CA_BUNDLE/CURL_CA_BUNDLE overrode
 #                      verify_ssl/ca_bundle
 # =============================================================================
 """
-nessus_cli.py - All-round CLI för Nessus Professional REST-API.
+nessus_cli.py - All-round CLI for the Nessus Professional REST API.
 
-Alla inställningar läses från settings.json (se settings.example.json).
-Fälten auth.password, auth.secret_key och export.db_password ska vara base64-kodade
-(skapa värdet med: nessus_cli.py --encode-secret).
-Miljövariabler går före filen och anges i KLARTEXT:
+All settings are read from settings.json (see settings.example.json).
+The fields auth.password, auth.secret_key and export.db_password must be base64-encoded
+(create the value with: nessus_cli.py --encode-secret).
+Environment variables take precedence over the file and are given in PLAIN TEXT:
     NESSUS_URL, NESSUS_ACCESS_KEY, NESSUS_SECRET_KEY, NESSUS_USERNAME, NESSUS_PASSWORD
 
-Exempel:
+Examples:
     nessus_cli.py --check-connection
     nessus_cli.py --list-scans --folder "My Scans"
-    nessus_cli.py --create-scan "Kund X DMZ" --targets 10.0.0.0/24,web01 --template basic --launch-now --format csv pdf
-    nessus_cli.py --launch "Kund X DMZ" --wait
+    nessus_cli.py --create-scan "Customer X DMZ" --targets 10.0.0.0/24,web01 --template basic --launch-now --format csv pdf
+    nessus_cli.py --launch "Customer X DMZ" --wait
     nessus_cli.py --export 42 --format csv html nessus --history-id all --out ./reports
     nessus_cli.py --status 42 --debug
 
-Kräver: Python 3.6+, requests 2.20+ (cryptography valfritt, ger mer cert-info i --check-connection)
+Requires: Python 3.6+, requests 2.20+ (cryptography optional, adds certificate details to --check-connection)
 """
 
 import argparse
@@ -70,21 +71,21 @@ try:
     import requests
     import urllib3
 except ImportError:  # pragma: no cover
-    sys.exit("Modulen 'requests' saknas: pip install requests")
+    sys.exit("The 'requests' module is missing: pip install requests")
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 if sys.version_info < (3, 6):  # pragma: no cover
-    sys.exit("nessus_cli.py kräver Python 3.6 eller senare")
+    sys.exit("nessus_cli.py requires Python 3.6 or later")
 
 RUNNING_STATES = {"running", "pending", "processing", "resuming", "pausing", "stopping", "publishing"}
 EXPORT_FORMATS = ("nessus", "csv", "html", "pdf", "db", "json")
 FILE_EXT = {f: f for f in EXPORT_FORMATS}
 DEFAULT_CHAPTERS = "vuln_hosts_summary;vuln_by_host;remediations"
 
-# Fält i settings.json som lagras base64-kodade
+# Fields in settings.json that are stored base64-encoded
 B64_FIELDS = (("auth", "password"), ("auth", "secret_key"), ("export", "db_password"))
-# Nycklar vars värden alltid maskas i debug-utskrifter
+# Keys whose values are always masked in debug output
 SECRET_KEYS = {"password", "secret_key", "access_key", "db_password", "api_token", "token"}
 
 DEFAULT_SETTINGS = {
@@ -121,7 +122,7 @@ DEFAULT_SETTINGS = {
 
 
 # --------------------------------------------------------------------------- #
-# Loggning / hjälpfunktioner
+# Logging / helpers
 # --------------------------------------------------------------------------- #
 class NessusError(Exception):
     pass
@@ -143,9 +144,9 @@ def debug(msg: str) -> None:
 
 def mask(value, keep: int = 4) -> str:
     if value in (None, ""):
-        return "(tom)"
+        return "(empty)"
     s = str(value)
-    return s[:keep] + "…" + f"({len(s)} tecken)" if len(s) > keep else "****"
+    return s[:keep] + "…" + f"({len(s)} chars)" if len(s) > keep else "****"
 
 
 def redact(obj):
@@ -191,24 +192,24 @@ def b64decode_field(value: str, field: str) -> str:
     try:
         return base64.b64decode(value.strip(), validate=True).decode("utf-8")
     except (binascii.Error, UnicodeDecodeError, ValueError) as e:
-        raise NessusError(f"'{field}' i settings.json är inte giltig base64 ({e}). "
-                          f"Skapa värdet med: nessus_cli.py --encode-secret") from e
+        raise NessusError(f"'{field}' in settings.json is not valid base64 ({e}). "
+                          f"Create the value with: nessus_cli.py --encode-secret") from e
 
 
 def load_settings(path: str) -> dict:
     p = Path(path)
-    debug(f"Läser settings: {p.resolve()}")
+    debug(f"Reading settings: {p.resolve()}")
     if not p.is_file():
-        raise NessusError(f"Hittar inte settings-filen: {p.resolve()} (utgå från settings.example.json)")
+        raise NessusError(f"Settings file not found: {p.resolve()} (start from settings.example.json)")
     if os.name == "posix":
         mode = p.stat().st_mode
-        debug(f"Filrättigheter: {stat.filemode(mode)} ägare uid={p.stat().st_uid}")
+        debug(f"File permissions: {stat.filemode(mode)} owner uid={p.stat().st_uid}")
         if mode & (stat.S_IRWXG | stat.S_IRWXO):
-            log(f"VARNING: {p} är läsbar för andra än ägaren. Kör: chmod 600 {p}", err=True)
+            log(f"WARNING: {p} is readable by users other than the owner. Run: chmod 600 {p}", err=True)
     try:
         user = json.loads(p.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        raise NessusError(f"Ogiltig JSON i {p}: {e}") from e
+        raise NessusError(f"Invalid JSON in {p}: {e}") from e
     cfg = deep_merge(DEFAULT_SETTINGS, user)
 
     for sect, key in B64_FIELDS:
@@ -224,12 +225,12 @@ def load_settings(path: str) -> dict:
     for env, keys in env_map.items():
         val = os.environ.get(env)
         if val:
-            debug(f"Miljövariabel {env} åsidosätter {'.'.join(keys)}")
+            debug(f"Environment variable {env} overrides {'.'.join(keys)}")
             tgt = cfg
             for k in keys[:-1]:
                 tgt = tgt[k]
             tgt[keys[-1]] = val
-    debug("Effektiva inställningar (hemligheter maskade, efter base64-avkodning):\n" + pretty(redact(cfg)))
+    debug("Effective settings (secrets masked, after base64 decoding):\n" + pretty(redact(cfg)))
     return cfg
 
 
@@ -246,7 +247,7 @@ def safe_name(name: str) -> str:
 
 def print_table(rows: List[dict], cols: List[Tuple[str, str]]) -> None:
     if not rows:
-        log("(inga träffar)")
+        log("(no results)")
         return
     widths = {k: max(len(h), *(len(str(r.get(k, ""))) for r in rows)) for k, h in cols}
     log("  ".join(h.ljust(widths[k]) for k, h in cols))
@@ -264,7 +265,7 @@ def parse_targets(targets: Optional[str], targets_file: Optional[str]) -> List[s
             line = line.split("#", 1)[0].strip()
             if line:
                 items += [t.strip() for t in re.split(r"[,\s]+", line) if t.strip()]
-    debug(f"Mål ({len(items)} st): {items}")
+    debug(f"Targets ({len(items)}): {items}")
     return items
 
 
@@ -272,9 +273,9 @@ def debug_environment(argv) -> None:
     if not DEBUG:
         return
     debug(f"nessus_cli {__version__}  argv={argv}")
-    debug(f"Python {sys.version.split()[0]} ({sys.executable})  plattform: {platform.platform()}")
+    debug(f"Python {sys.version.split()[0]} ({sys.executable})  platform: {platform.platform()}")
     debug(f"requests {requests.__version__}  urllib3 {urllib3.__version__}  {ssl.OPENSSL_VERSION}")
-    debug(f"requests CA-bundle (default): {requests.certs.where()}")
+    debug(f"requests CA bundle (default): {requests.certs.where()}")
     for v in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "NO_PROXY", "no_proxy",
               "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE", "NESSUS_SETTINGS"):
         if os.environ.get(v):
@@ -282,13 +283,13 @@ def debug_environment(argv) -> None:
     for v in ("NESSUS_URL", "NESSUS_ACCESS_KEY", "NESSUS_SECRET_KEY", "NESSUS_USERNAME", "NESSUS_PASSWORD"):
         if os.environ.get(v):
             debug(f"env {v}={mask(os.environ[v]) if 'KEY' in v or 'PASS' in v else os.environ[v]}")
-    # urllib3 loggar anslutningar/återanvändning/retries
+    # urllib3 logs connections/reuse/retries
     logging.basicConfig(stream=sys.stderr, level=logging.DEBUG,
                         format="[debug %(asctime)s] %(name)s: %(message)s", datefmt="%H:%M:%S")
 
 
 # --------------------------------------------------------------------------- #
-# API-klient
+# API client
 # --------------------------------------------------------------------------- #
 class NessusClient:
     def __init__(self, cfg: dict):
@@ -305,16 +306,16 @@ class NessusClient:
         self._session_token = None  # type: Optional[str]
         self.api_token_source = None  # type: Optional[str]
         self.api_token_missing = False
-        self.scan_folder = None   # sätts från -g/--folder, används för att avgöra scannamn
-        self.report_template_ref = None  # sätts från -e/--report-template
+        self.scan_folder = None   # set from -g/--folder, used to resolve scan names
+        self.report_template_ref = None  # set from -e/--report-template
         self._rt_cache = {}
-        debug(f"Klient: url={self.url} verify={self.verify} timeout={self.timeout}s "
-              f"proxies={requests.utils.get_environ_proxies(self.url) or 'inga'}")
+        debug(f"Client: url={self.url} verify={self.verify} timeout={self.timeout}s "
+              f"proxies={requests.utils.get_environ_proxies(self.url) or 'none'}")
 
     # ---- transport --------------------------------------------------------
     def _req(self, method: str, path: str, **kw) -> requests.Response:
         kw.setdefault("timeout", self.timeout)
-        # verify skickas per anrop: annars skriver REQUESTS_CA_BUNDLE/CURL_CA_BUNDLE över session.verify
+        # verify is passed per request: otherwise REQUESTS_CA_BUNDLE/CURL_CA_BUNDLE override session.verify
         kw.setdefault("verify", self.verify)
         url = self.url + path
         if DEBUG:
@@ -330,13 +331,13 @@ class NessusClient:
         try:
             r = self.s.request(method, url, **kw)
         except requests.exceptions.SSLError as e:
-            raise NessusError(f"TLS-fel mot {self.url}: {e}\n"
-                              "Tips: sätt 'ca_bundle' till Nessus CA-cert, eller 'verify_ssl': false (labb). "
-                              "Kör --check-connection för detaljer.") from e
+            raise NessusError(f"TLS error against {self.url}: {e}\n"
+                              "Hint: set 'ca_bundle' to the Nessus CA certificate, or 'verify_ssl': false (lab). "
+                              "Run --check-connection for details.") from e
         except requests.exceptions.ConnectionError as e:
-            raise NessusError(f"Kan inte ansluta till {self.url}: {e}") from e
+            raise NessusError(f"Cannot connect to {self.url}: {e}") from e
         except requests.exceptions.Timeout as e:
-            raise NessusError(f"Timeout ({kw['timeout']}s) mot {url}") from e
+            raise NessusError(f"Timeout ({kw['timeout']}s) against {url}") from e
         if DEBUG:
             ms = (time.perf_counter() - t0) * 1000
             debug(f"<<< HTTP {r.status_code} {r.reason}  ({ms:.0f} ms, HTTP/{r.raw.version / 10 if r.raw.version else '?'})")
@@ -349,35 +350,35 @@ class NessusClient:
                 msg = r.text.strip()[:500]
             hint = ""
             if r.status_code == 412 or "API is not available" in str(msg):
-                hint = ("\nTips: Nessus Professional blockerar vissa anrop (t.ex. skapa/starta scan) via API-nycklar. "
-                        "Prova auth.method = \"session\" (användarnamn/lösenord + X-API-Token).")
+                hint = ("\nHint: Nessus Professional blocks some calls (e.g. create/launch scan) made with API keys. "
+                        "Try auth.method = \"session\" (username/password + X-API-Token).")
             elif r.status_code == 401:
-                hint = "\nTips: kontrollera nycklar/lösenord i settings.json (base64-kodade?)."
+                hint = "\nHint: check the keys/password in settings.json (base64-encoded?)."
             elif r.status_code == 403:
-                hint = "\nTips: användaren saknar behörighet för anropet."
+                hint = "\nHint: the user lacks permission for this call."
             raise NessusError(f"{method} {path} -> HTTP {r.status_code}: {msg}{hint}")
         return r
 
     @staticmethod
     def _debug_body(r: requests.Response, streamed: bool) -> None:
         if streamed:
-            debug(f"<<< body: (strömmas till fil, Content-Length={r.headers.get('Content-Length', '?')})")
+            debug(f"<<< body: (streamed to file, Content-Length={r.headers.get('Content-Length', '?')})")
             return
         ctype = r.headers.get("Content-Type", "")
         if not r.content:
-            debug("<<< body: (tom)")
+            debug("<<< body: (empty)")
         elif "json" in ctype:
             try:
                 debug("<<< body: " + pretty(redact(r.json())))
             except ValueError:
-                debug("<<< body (ogiltig JSON): " + r.text[:4000])
+                debug("<<< body (invalid JSON): " + r.text[:4000])
         elif "javascript" in ctype:
-            debug(f"<<< body: (javascript, {len(r.content):,} byte – visas inte, innehåller X-API-Token)")
+            debug(f"<<< body: (javascript, {len(r.content):,} bytes – not shown, contains X-API-Token)")
         elif ctype.startswith("text"):
             txt = r.text
-            debug(f"<<< body ({len(txt):,} tecken{', visar 2000 första' if len(txt) > 2000 else ''}): {txt[:2000]}")
+            debug(f"<<< body ({len(txt):,} chars{', showing first 2000' if len(txt) > 2000 else ''}): {txt[:2000]}")
         else:
-            debug(f"<<< body: (binär {ctype}, {len(r.content):,} byte)")
+            debug(f"<<< body: (binary {ctype}, {len(r.content):,} bytes)")
 
     def get(self, path, **kw):
         r = self._req("GET", path, **kw)
@@ -391,31 +392,31 @@ class NessusClient:
         r = self._req("DELETE", path, **kw)
         return r.json() if r.content else {}
 
-    # ---- autentisering ----------------------------------------------------
+    # ---- authentication ---------------------------------------------------
     @property
     def auth_method(self) -> str:
         return (self.auth.get("method") or "session").lower()
 
     def login(self) -> None:
         method = self.auth_method
-        debug(f"Autentisering: metod={method}")
+        debug(f"Authentication: method={method}")
         if method == "api_keys":
             ak, sk = self.auth.get("access_key"), self.auth.get("secret_key")
             if not ak or not sk:
-                raise NessusError("auth.access_key/secret_key saknas i settings.json")
+                raise NessusError("auth.access_key/secret_key missing in settings.json")
             self.s.headers["X-ApiKeys"] = f"accessKey={ak}; secretKey={sk}"
         elif method == "session":
             u, p = self.auth.get("username"), self.auth.get("password")
             if not u or not p:
-                raise NessusError("auth.username/password saknas i settings.json")
+                raise NessusError("auth.username/password missing in settings.json")
             data = self.post("/session", json={"username": u, "password": p})
             self._session_token = data.get("token")
             if not self._session_token:
-                raise NessusError("Inloggningen gav ingen session-token")
+                raise NessusError("Login returned no session token")
             self.s.headers["X-Cookie"] = f"token={self._session_token}"
-            debug(f"Session-token erhållen: {mask(self._session_token)}")
+            debug(f"Session token received: {mask(self._session_token)}")
         else:
-            raise NessusError(f"Okänd auth.method: {method} (använd 'api_keys' eller 'session')")
+            raise NessusError(f"Unknown auth.method: {method} (use 'api_keys' or 'session')")
 
         use_tok = self.auth.get("use_api_token")
         if use_tok is None:
@@ -425,12 +426,12 @@ class NessusClient:
             tok = self.auth.get("api_token") or self.fetch_api_token()
             if tok:
                 self.s.headers["X-API-Token"] = tok
-                debug(f"X-API-Token satt: {mask(tok, 8)} (källa: {self.api_token_source})")
+                debug(f"X-API-Token set: {mask(tok, 8)} (source: {self.api_token_source})")
             else:
                 self.api_token_missing = True
-                log("VARNING: hittade ingen X-API-Token i webbgränssnittets JavaScript. Fortsätter utan – "
-                    "läsning/export fungerar oftast, men skapa/starta scan kan ge HTTP 412. "
-                    "Sätt auth.api_token manuellt vid behov (kör med --debug för detaljer).", err=True)
+                log("WARNING: no X-API-Token found in the web UI JavaScript. Continuing without it – "
+                    "listing/export usually works, but create/launch scan may return HTTP 412. "
+                    "Set auth.api_token manually if needed (run with --debug for details).", err=True)
 
     TOKEN_ANCHORS = ("getApiToken", "X-API-Token", "x-api-token", "apiToken", "api_token")
     UUID_RE = re.compile(r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}")
@@ -440,13 +441,13 @@ class NessusClient:
             for m in re.finditer(re.escape(anchor), js):
                 window = js[max(0, m.start() - 300):m.end() + 600]
                 u = self.UUID_RE.search(window)
-                debug(f"{src}: '{anchor}' på pos {m.start()} -> {'UUID hittad' if u else 'ingen UUID i närheten'}")
+                debug(f"{src}: '{anchor}' at pos {m.start()} -> {'UUID found' if u else 'no UUID nearby'}")
                 if u:
                     return u.group(0)
         return None
 
     def _js_candidates(self) -> List[str]:
-        """Skriptfiler som webbgränssnittet laddar: nessus6.js först, sedan <script src> från startsidan."""
+        """Script files loaded by the web UI: nessus6.js first, then <script src> from the start page."""
         paths = ["/nessus6.js"]
         try:
             html = self._req("GET", "/", headers={"Accept": "text/html"}).text
@@ -457,13 +458,13 @@ class NessusClient:
                 if src not in paths:
                     paths.append(src)
         except NessusError as e:
-            debug(f"Kunde inte läsa startsidan för skriptlista: {e}")
-        debug(f"JS-filer att söka X-API-Token i: {paths}")
+            debug(f"Could not read the start page for the script list: {e}")
+        debug(f"JS files to search for X-API-Token: {paths}")
         return paths
 
     def fetch_api_token(self) -> Optional[str]:
-        """Hämtar X-API-Token ur webbgränssnittets JavaScript (behövs för session-auth i Pro).
-        Returnerar None om den inte hittas (anroparen fortsätter utan)."""
+        """Fetches the X-API-Token from the web UI JavaScript (needed for session auth in Pro).
+        Returns None if not found (the caller continues without it)."""
         for path in self._js_candidates():
             try:
                 r = self._req("GET", path, headers={"Accept": "*/*"})
@@ -471,9 +472,9 @@ class NessusClient:
                 debug(f"{path}: {e}")
                 continue
             ctype = r.headers.get("Content-Type", "")
-            debug(f"{path}: {len(r.text):,} tecken, Content-Type={ctype}")
+            debug(f"{path}: {len(r.text):,} chars, Content-Type={ctype}")
             if "html" in ctype:
-                debug(f"{path}: fick HTML istället för JS (servern startar/uppdaterar plugins?)")
+                debug(f"{path}: got HTML instead of JS (server starting/updating plugins?)")
                 continue
             tok = self._token_from_js(r.text, path)
             if tok:
@@ -485,12 +486,12 @@ class NessusClient:
         if self._session_token:
             try:
                 self._req("DELETE", "/session")
-                debug("Utloggad (DELETE /session)")
+                debug("Logged out (DELETE /session)")
             except NessusError as e:
-                debug(f"Utloggning misslyckades: {e}")
+                debug(f"Logout failed: {e}")
             self._session_token = None
 
-    # ---- uppslag ----------------------------------------------------------
+    # ---- lookups ----------------------------------------------------------
     def server_properties(self):
         return self.get("/server/properties")
 
@@ -518,14 +519,14 @@ class NessusClient:
         return self.get("/policies").get("policies") or []
 
     def report_templates(self) -> List[dict]:
-        """Rapportmallar för html/pdf (GET /reports/custom/templates, Nessus 8.x+/10.x)."""
+        """Report templates for html/pdf (GET /reports/custom/templates, Nessus 8.x+/10.x)."""
         data = self.get("/reports/custom/templates")
         if isinstance(data, dict):
             data = data.get("templates", data.get("reports", []))
         return data if isinstance(data, list) else []
 
     def resolve_report_template(self, ref) -> int:
-        """Rapportmall på id eller namn (skiftlägesokänsligt). Cachas per körning."""
+        """Report template by id or name (case-insensitive). Cached per run."""
         key = str(ref).strip()
         if key in self._rt_cache:
             return self._rt_cache[key]
@@ -533,29 +534,29 @@ class NessusClient:
             tpls = self.report_templates()
         except NessusError as e:
             if key.isdigit():
-                debug(f"Kunde inte lista rapportmallar ({e}) – använder id {key} som det är")
+                debug(f"Could not list report templates ({e}) – using id {key} as is")
                 return int(key)
-            raise NessusError(f"Kan inte slå upp rapportmallen '{key}': {e}") from e
+            raise NessusError(f"Cannot look up report template '{key}': {e}") from e
         if key.isdigit():
             hits = [t for t in tpls if str(t.get("id")) == key]
             if not hits and tpls:
-                raise NessusError(f"Ingen rapportmall med id {key}. Lista med -R/--list-report-templates")
+                raise NessusError(f"No report template with id {key}. List them with -R/--list-report-templates")
             tid = int(key)
         else:
             hits = [t for t in tpls if str(t.get("name", "")).lower() == key.lower()]
             if not hits:
-                names = ", ".join(sorted(str(t.get("name")) for t in tpls)) or "(inga)"
-                raise NessusError(f"Ingen rapportmall som heter '{key}'. Tillgängliga: {names}")
+                names = ", ".join(sorted(str(t.get("name")) for t in tpls)) or "(none)"
+                raise NessusError(f"No report template named '{key}'. Available: {names}")
             if len(hits) > 1:
-                raise NessusError(f"Flera rapportmallar heter '{key}' (id: "
-                                  f"{', '.join(str(h.get('id')) for h in hits)}) – ange id")
+                raise NessusError(f"Several report templates are named '{key}' (id: "
+                                  f"{', '.join(str(h.get('id')) for h in hits)}) – give the id")
             tid = int(hits[0]["id"])
-        debug(f"Rapportmall '{key}' -> id {tid}" + (f" ({hits[0].get('name')})" if hits else ""))
+        debug(f"Report template '{key}' -> id {tid}" + (f" ({hits[0].get('name')})" if hits else ""))
         self._rt_cache[key] = tid
         return tid
 
     def effective_report_template(self) -> Optional[int]:
-        """-e/--report-template går före export.template_id i settings (båda kan vara id eller namn)."""
+        """-e/--report-template takes precedence over export.template_id in settings (both may be id or name)."""
         ref = self.report_template_ref or self.cfg["export"].get("template_id")
         return self.resolve_report_template(ref) if ref not in (None, "") else None
 
@@ -566,13 +567,13 @@ class NessusClient:
             return int(ref)
         for f in self.folders():
             if f.get("name", "").lower() == str(ref).lower():
-                debug(f"Mapp '{ref}' -> id {f['id']}")
+                debug(f"Folder '{ref}' -> id {f['id']}")
                 return f["id"]
-        raise NessusError(f"Hittar ingen mapp som heter '{ref}'")
+        raise NessusError(f"No folder named '{ref}'")
 
     def resolve_scan(self, ref: str) -> dict:
-        """Slår upp scan på id eller namn. Namn söks i alla mappar utom papperskorgen,
-        eller bara i --folder om den är angiven. Flera träffar ger fel med id och mapp."""
+        """Looks up a scan by id or name. Names are searched in all folders except the trash,
+        or only in --folder if given. Several matches give an error listing id and folder."""
         data = self.scans()
         all_scans = data.get("scans") or []
         folders = {f["id"]: f for f in data.get("folders") or []}
@@ -580,25 +581,25 @@ class NessusClient:
         if str(ref).isdigit():
             for s in all_scans:
                 if s["id"] == int(ref):
-                    debug(f"Scan id {ref} -> '{s.get('name')}' i mapp '{fname(s)}'")
+                    debug(f"Scan id {ref} -> '{s.get('name')}' in folder '{fname(s)}'")
                     return s
-            raise NessusError(f"Ingen scan med id {ref}")
+            raise NessusError(f"No scan with id {ref}")
 
         if self.scan_folder not in (None, ""):
             fid = self.resolve_folder(self.scan_folder)
             pool = [s for s in all_scans if s.get("folder_id") == fid]
-            where = f"i mappen '{self.scan_folder}'"
+            where = f"in folder '{self.scan_folder}'"
         else:
             trash = {fid for fid, f in folders.items() if f.get("type") == "trash"}
             pool = [s for s in all_scans if s.get("folder_id") not in trash]
-            where = "(papperskorgen exkluderad)"
+            where = "(trash excluded)"
         hits = [s for s in pool if s.get("name", "").lower() == str(ref).lower()]
         if not hits:
-            raise NessusError(f"Ingen scan med namnet '{ref}' {where}")
+            raise NessusError(f"No scan named '{ref}' {where}")
         if len(hits) > 1:
             lst = ", ".join(f"id {h['id']} ({fname(h)})" for h in hits)
-            raise NessusError(f"Flera scans heter '{ref}': {lst}. Ange id, eller mapp med -g/--folder")
-        debug(f"Scan '{ref}' -> id {hits[0]['id']} i mapp '{fname(hits[0])}'")
+            raise NessusError(f"Several scans are named '{ref}': {lst}. Give the id, or a folder with -g/--folder")
+        debug(f"Scan '{ref}' -> id {hits[0]['id']} in folder '{fname(hits[0])}'")
         return hits[0]
 
     def resolve_template(self, ref: str) -> dict:
@@ -606,19 +607,19 @@ class NessusClient:
         for t in tpls:
             if ref.lower() in (str(t.get("uuid", "")).lower(), str(t.get("name", "")).lower(),
                                str(t.get("title", "")).lower()):
-                debug(f"Mall '{ref}' -> {t.get('name')} / {t.get('uuid')}")
+                debug(f"Template '{ref}' -> {t.get('name')} / {t.get('uuid')}")
                 return t
         names = ", ".join(sorted(t.get("name", "") for t in tpls))
-        raise NessusError(f"Okänd mall '{ref}'. Tillgängliga: {names}")
+        raise NessusError(f"Unknown template '{ref}'. Available: {names}")
 
     def resolve_policy(self, ref: str) -> dict:
         for p in self.policies():
             if str(p.get("id")) == str(ref) or p.get("name", "").lower() == str(ref).lower():
                 debug(f"Policy '{ref}' -> id {p['id']} template_uuid {p.get('template_uuid')}")
                 return p
-        raise NessusError(f"Ingen policy '{ref}'")
+        raise NessusError(f"No policy '{ref}'")
 
-    # ---- scan-hantering ---------------------------------------------------
+    # ---- scan management --------------------------------------------------
     def create_scan(self, name, targets, template=None, policy=None, folder=None, description="") -> dict:
         settings = {"name": name, "description": description, "text_targets": ",".join(targets),
                     "enabled": False, "launch": "ON_DEMAND"}
@@ -648,7 +649,7 @@ class NessusClient:
         d = self.cfg["scan_defaults"]
         interval = int(d.get("poll_interval", 30))
         deadline = time.time() + int(d.get("max_wait_minutes", 720)) * 60
-        debug(f"Väntar på scan {scan_id} (uuid {scan_uuid}), poll var {interval}s")
+        debug(f"Waiting for scan {scan_id} (uuid {scan_uuid}), polling every {interval}s")
         last = None
         time.sleep(min(5, interval))
         while True:
@@ -661,7 +662,7 @@ class NessusClient:
             if status not in RUNNING_STATES:
                 return hist or {"status": status}
             if time.time() > deadline:
-                raise NessusError(f"Timeout i väntan på scan {scan_id} (status {status})")
+                raise NessusError(f"Timed out waiting for scan {scan_id} (status {status})")
             time.sleep(interval)
 
     @staticmethod
@@ -680,15 +681,15 @@ class NessusClient:
     def pick_history(self, scan_id: int, which: str) -> list:
         if which not in ("latest", "all"):
             if not str(which).isdigit():
-                raise NessusError(f"--history-id måste vara 'latest', 'all' eller ett heltal, inte '{which}'")
+                raise NessusError(f"--history-id must be 'latest', 'all' or an integer, not '{which}'")
             return [int(which)]
         done = [h for h in self.history(scan_id) if h.get("status") in ("completed", "imported", "canceled", "aborted")]
         if not done:
-            log(f"Scan {scan_id}: ingen avslutad körning i historiken – exporterar utan history_id", err=True)
+            log(f"Scan {scan_id}: no finished run in the history – exporting without history_id", err=True)
             return [None]
         completed = [h for h in done if h.get("status") in ("completed", "imported")] or done
         picked = [completed[0]["history_id"]] if which == "latest" else [h["history_id"] for h in completed]
-        debug(f"Valda history_id ({which}): {picked}")
+        debug(f"Selected history_id ({which}): {picked}")
         return picked
 
     # ---- export -----------------------------------------------------------
@@ -716,7 +717,7 @@ class NessusClient:
                 body["chapters"] = ecfg.get("chapters") or DEFAULT_CHAPTERS
         if fmt == "db":
             if not ecfg.get("db_password"):
-                raise NessusError("Format 'db' kräver export.db_password (base64) i settings.json")
+                raise NessusError("Format 'db' requires export.db_password (base64) in settings.json")
             body["password"] = ecfg["db_password"]
         body.update((ecfg.get("extra") or {}).get(fmt, {}))
 
@@ -724,7 +725,7 @@ class NessusClient:
         res = self.post(f"/scans/{scan_id}/export", json=body, params=params)
         file_id = res.get("file")
         if file_id is None:
-            raise NessusError(f"Export-anropet returnerade inget fil-id: {res}")
+            raise NessusError(f"The export call returned no file id: {res}")
 
         interval = float(ecfg.get("poll_interval", 3))
         deadline = time.time() + int(ecfg.get("timeout_seconds", 900))
@@ -732,12 +733,12 @@ class NessusClient:
         while True:
             st = self.get(f"/scans/{scan_id}/export/{file_id}/status").get("status")
             if st == "ready":
-                debug(f"Export {fmt} file={file_id} klar efter {time.time() - t0:.1f}s")
+                debug(f"Export {fmt} file={file_id} ready after {time.time() - t0:.1f}s")
                 break
             if st == "error":
-                raise NessusError(f"Nessus kunde inte generera {fmt}-rapporten (file {file_id})")
+                raise NessusError(f"Nessus could not generate the {fmt} report (file {file_id})")
             if time.time() > deadline:
-                raise NessusError(f"Timeout vid generering av {fmt}-rapport")
+                raise NessusError(f"Timed out generating the {fmt} report")
             time.sleep(interval)
 
         r = self._req("GET", f"/scans/{scan_id}/export/{file_id}/download",
@@ -745,7 +746,7 @@ class NessusClient:
         with open(target, "wb") as fh:
             for chunk in r.iter_content(chunk_size=1 << 16):
                 fh.write(chunk)
-        debug(f"Sparad: {target.resolve()} ({target.stat().st_size:,} byte, "
+        debug(f"Saved: {target.resolve()} ({target.stat().st_size:,} bytes, "
               f"sha256 {hashlib.sha256(target.read_bytes()).hexdigest()})")
         return target
 
@@ -763,11 +764,11 @@ class Checker:
 
     def warning(self, name, detail=""):
         self.warn += 1
-        log(f"[VARN] {name}{': ' + detail if detail else ''}")
+        log(f"[WARN] {name}{': ' + detail if detail else ''}")
 
     def error(self, name, detail=""):
         self.fail += 1
-        log(f"[ FEL] {name}{': ' + detail if detail else ''}")
+        log(f"[FAIL] {name}{': ' + detail if detail else ''}")
 
 
 def _cert_details(der: bytes) -> str:
@@ -778,8 +779,8 @@ def _cert_details(der: bytes) -> str:
         c = x509.load_der_x509_certificate(der)
         nva = getattr(c, "not_valid_after_utc", None) or c.not_valid_after.replace(tzinfo=timezone.utc)
         return (f"subject={c.subject.rfc4514_string()} issuer={c.issuer.rfc4514_string()} "
-                f"giltigt till {nva:%Y-%m-%d} sha256={fp}")
-    except Exception:  # cryptography saknas eller kan inte tolka
+                f"valid until {nva:%Y-%m-%d} sha256={fp}")
+    except Exception:  # cryptography missing or unable to parse
         return f"sha256={fp}"
 
 
@@ -789,17 +790,17 @@ def check_connection(cfg: dict) -> int:
     host, scheme = u.hostname, (u.scheme or "https").lower()
     port = u.port or (443 if scheme == "https" else 80)
     timeout = min(int(cfg.get("timeout", 60)), 15)
-    log(f"Kontrollerar anslutning till {cfg['url']}  (auth: {cfg['auth'].get('method')})\n")
+    log(f"Checking connection to {cfg['url']}  (auth: {cfg['auth'].get('method')})\n")
 
     if not host:
-        chk.error("URL", f"kan inte tolka '{cfg['url']}'")
+        chk.error("URL", f"cannot parse '{cfg['url']}'")
         return 1
     if scheme != "https":
-        chk.warning("URL", "http:// används – Nessus kör normalt endast https på 8834")
+        chk.warning("URL", "http:// in use – Nessus normally only serves https on 8834")
 
     proxies = requests.utils.get_environ_proxies(cfg["url"])
     if proxies:
-        chk.warning("Proxy", f"requests kommer gå via {proxies} – nät/TLS-testerna nedan går direkt")
+        chk.warning("Proxy", f"requests will go via {proxies} – the network/TLS checks below connect directly")
 
     # 1. DNS
     try:
@@ -813,7 +814,7 @@ def check_connection(cfg: dict) -> int:
     try:
         t0 = time.perf_counter()
         with socket.create_connection((host, port), timeout=timeout):
-            chk.ok("TCP", f"{host}:{port} öppen ({(time.perf_counter() - t0) * 1000:.0f} ms)")
+            chk.ok("TCP", f"{host}:{port} open ({(time.perf_counter() - t0) * 1000:.0f} ms)")
     except OSError as e:
         chk.error("TCP", f"{host}:{port}: {e}")
         return 1
@@ -824,7 +825,7 @@ def check_connection(cfg: dict) -> int:
         der = None
         if verify or ca:
             cafile = ca or os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("CURL_CA_BUNDLE") or requests.certs.where()
-            debug(f"TLS-kontroll med CA-fil: {cafile}")
+            debug(f"TLS check with CA file: {cafile}")
             ctx = ssl.create_default_context(cafile=cafile)
             try:
                 with socket.create_connection((host, port), timeout=timeout) as raw, \
@@ -832,23 +833,23 @@ def check_connection(cfg: dict) -> int:
                     pc = tls.getpeercert()
                     der = tls.getpeercert(binary_form=True)
                     days = (ssl.cert_time_to_seconds(pc["notAfter"]) - time.time()) / 86400
-                    chk.ok("TLS-handskakning", f"{tls.version()} {tls.cipher()[0]}")
-                    chk.ok("Certifikat verifierat", _cert_details(der) + f" CA={cafile}")
+                    chk.ok("TLS handshake", f"{tls.version()} {tls.cipher()[0]}")
+                    chk.ok("Certificate verified", _cert_details(der) + f" CA={cafile}")
                     if days < 0:
-                        chk.error("Certifikatets giltighet", "utgånget")
+                        chk.error("Certificate validity", "expired")
                     elif days < 30:
-                        chk.warning("Certifikatets giltighet", f"går ut om {days:.0f} dagar")
+                        chk.warning("Certificate validity", f"expires in {days:.0f} days")
             except (ssl.SSLError, ssl.CertificateError, OSError) as e:
-                # 3.7+: SSLCertVerificationError (har verify_message); 3.6: SSLError/CertificateError
+                # 3.7+: SSLCertVerificationError (has verify_message); 3.6: SSLError/CertificateError
                 verify_fail = isinstance(e, ssl.CertificateError) or "CERTIFICATE_VERIFY_FAILED" in str(e) \
                     or hasattr(e, "verify_message")
                 if verify_fail:
                     reason = getattr(e, "verify_message", None) or str(e)
-                    chk.error("Certifikatverifiering", f"{reason} – tips: ca_bundle = Nessus CA "
+                    chk.error("Certificate verification", f"{reason} – hint: ca_bundle = Nessus CA "
                               "(Linux: /opt/nessus/com/nessus/CA/cacert.pem, "
                               "Windows: C:\\ProgramData\\Tenable\\Nessus\\nessus\\CA\\cacert.pem)")
                 else:
-                    chk.error("TLS-handskakning", str(e))
+                    chk.error("TLS handshake", str(e))
         if der is None:
             ctx = ssl.create_default_context()
             ctx.check_hostname, ctx.verify_mode = False, ssl.CERT_NONE
@@ -856,39 +857,39 @@ def check_connection(cfg: dict) -> int:
                 with socket.create_connection((host, port), timeout=timeout) as raw, \
                         ctx.wrap_socket(raw, server_hostname=host) as tls:
                     der = tls.getpeercert(binary_form=True)
-                    chk.ok("TLS (overifierad)", f"{tls.version()} {tls.cipher()[0]}")
-                    log(f"       Servercert: {_cert_details(der)}")
+                    chk.ok("TLS (unverified)", f"{tls.version()} {tls.cipher()[0]}")
+                    log(f"       Server certificate: {_cert_details(der)}")
                     if not (verify or ca):
-                        chk.warning("TLS-verifiering", "avstängd i settings (verify_ssl=false)")
+                        chk.warning("TLS verification", "disabled in settings (verify_ssl=false)")
             except (ssl.SSLError, OSError) as e:
-                chk.error("TLS-handskakning", str(e))
+                chk.error("TLS handshake", str(e))
                 return 1
 
     client = NessusClient(cfg)
-    # 4. Oautentiserat API-anrop
+    # 4. Unauthenticated API call
     try:
         st = client.server_status()
         s = st.get("status")
-        (chk.ok if s == "ready" else chk.warning)("Nessus-tjänst", f"status={s} progress={st.get('progress')}")
+        (chk.ok if s == "ready" else chk.warning)("Nessus service", f"status={s} progress={st.get('progress')}")
     except NessusError as e:
-        chk.error("Nessus-tjänst (GET /server/status)", str(e))
+        chk.error("Nessus service (GET /server/status)", str(e))
         return 1
 
-    # 5. Autentisering
+    # 5. Authentication
     try:
         client.login()
-        chk.ok("Autentisering", client.auth_method)
+        chk.ok("Authentication", client.auth_method)
         if "X-API-Token" in client.s.headers:
-            chk.ok("X-API-Token", f"hittad (källa: {client.api_token_source})")
+            chk.ok("X-API-Token", f"found (source: {client.api_token_source})")
         elif client.api_token_missing:
-            chk.warning("X-API-Token", "hittades inte – skapa/starta scan kan ge HTTP 412. "
-                        "Sätt auth.api_token manuellt (se README, 'X-API-Token')")
+            chk.warning("X-API-Token", "not found – create/launch scan may return HTTP 412. "
+                        "Set auth.api_token manually (see README, 'X-API-Token')")
     except NessusError as e:
-        chk.error("Autentisering", str(e))
+        chk.error("Authentication", str(e))
         return 1
 
     try:
-        # 6. Serverinfo
+        # 6. Server info
         try:
             p = client.server_properties()
             lic = p.get("license") or {}
@@ -897,39 +898,39 @@ def check_connection(cfg: dict) -> int:
             if exp:
                 days = (int(exp) - time.time()) / 86400
                 (chk.ok if days > 30 else chk.warning if days > 0 else chk.error)(
-                    "Licens", f"{lic.get('type', '-')} utgår {fmt_ts(exp)} ({days:.0f} dagar)")
+                    "License", f"{lic.get('type', '-')} expires {fmt_ts(exp)} ({days:.0f} days)")
             if p.get("nessus_type") and "Professional" not in p["nessus_type"]:
-                chk.warning("Produkt", "skriptet är byggt för Nessus Professional")
+                chk.warning("Product", "the script is built for Nessus Professional")
         except NessusError as e:
             chk.error("GET /server/properties", str(e))
 
-        # 7. Användare
+        # 7. User
         try:
             si = client.session_info()
             perm = si.get("permissions")
             role = {128: "System Administrator", 64: "Administrator", 32: "Standard", 16: "Basic"}.get(perm, perm)
-            chk.ok("Användare", f"{si.get('username')} ({role})")
+            chk.ok("User", f"{si.get('username')} ({role})")
         except NessusError as e:
             chk.warning("GET /session", str(e))
 
-        # 8. Läsrättighet scans
+        # 8. Read access to scans
         try:
             d = client.scans()
-            chk.ok("Läsa scans", f"{len(d.get('scans') or [])} scans i {len(d.get('folders') or [])} mappar")
+            chk.ok("Read scans", f"{len(d.get('scans') or [])} scans in {len(d.get('folders') or [])} folders")
         except NessusError as e:
             chk.error("GET /scans", str(e))
 
         if client.auth_method == "api_keys":
-            chk.warning("API-nycklar", "i Nessus Pro kan skapa/starta scan ge HTTP 412 – överväg auth.method=session")
+            chk.warning("API keys", "in Nessus Pro, create/launch scan may return HTTP 412 – consider auth.method=session")
     finally:
         client.logout()
 
-    log(f"\nResultat: {chk.fail} fel, {chk.warn} varningar")
+    log(f"\nResult: {chk.fail} failed, {chk.warn} warnings")
     return 1 if chk.fail else 0
 
 
 # --------------------------------------------------------------------------- #
-# Åtgärder
+# Actions
 # --------------------------------------------------------------------------- #
 def act_server_info(c, a):
     props, st = c.server_properties(), c.server_status()
@@ -938,16 +939,16 @@ def act_server_info(c, a):
         return
     lic = props.get("license") or {}
     log(f"URL:         {c.url}")
-    log(f"Produkt:     {props.get('nessus_type')} {props.get('server_version') or props.get('nessus_ui_version')}")
-    log(f"UI-version:  {props.get('nessus_ui_version')}")
-    log(f"Plugin-set:  {props.get('plugin_set') or (props.get('feed_info') or {}).get('plugin_set', '-')}")
-    log(f"Licens:      {lic.get('type', '-')}  utgår {fmt_ts(lic.get('expiration_date'))}")
+    log(f"Product:     {props.get('nessus_type')} {props.get('server_version') or props.get('nessus_ui_version')}")
+    log(f"UI version:  {props.get('nessus_ui_version')}")
+    log(f"Plugin set:  {props.get('plugin_set') or (props.get('feed_info') or {}).get('plugin_set', '-')}")
+    log(f"License:     {lic.get('type', '-')}  expires {fmt_ts(lic.get('expiration_date'))}")
     log(f"Status:      {st.get('status')}")
 
 
 def act_list_folders(c, a):
     f = c.folders()
-    log(pretty(f)) if a.raw else print_table(f, [("id", "ID"), ("name", "Namn"), ("type", "Typ")])
+    log(pretty(f)) if a.raw else print_table(f, [("id", "ID"), ("name", "Name"), ("type", "Type")])
 
 
 def act_list_scans(c, a):
@@ -962,7 +963,7 @@ def act_list_scans(c, a):
              "folder": fnames.get(s.get("folder_id"), s.get("folder_id")),
              "modified": fmt_ts(s.get("last_modification_date"))}
             for s in sorted(scans, key=lambda s: s.get("last_modification_date") or 0, reverse=True)]
-    print_table(rows, [("id", "ID"), ("name", "Namn"), ("status", "Status"), ("folder", "Mapp"), ("modified", "Ändrad")])
+    print_table(rows, [("id", "ID"), ("name", "Name"), ("status", "Status"), ("folder", "Folder"), ("modified", "Modified")])
 
 
 def act_list_templates(c, a):
@@ -971,9 +972,9 @@ def act_list_templates(c, a):
         log(pretty(t))
         return
     rows = [{"name": x.get("name"), "title": x.get("title"), "uuid": x.get("uuid"),
-             "sub": "ja" if x.get("subscription_only") else ""} for x in t]
+             "sub": "yes" if x.get("subscription_only") else ""} for x in t]
     print_table(sorted(rows, key=lambda r: r["name"] or ""),
-                [("name", "Namn"), ("title", "Titel"), ("uuid", "UUID"), ("sub", "Kräver abonnemang")])
+                [("name", "Name"), ("title", "Title"), ("uuid", "UUID"), ("sub", "Subscription only")])
 
 
 def act_list_policies(c, a):
@@ -983,7 +984,7 @@ def act_list_policies(c, a):
         return
     rows = [{"id": x.get("id"), "name": x.get("name"), "template_uuid": x.get("template_uuid"),
              "modified": fmt_ts(x.get("last_modification_date"))} for x in p]
-    print_table(rows, [("id", "ID"), ("name", "Namn"), ("template_uuid", "Mall-UUID"), ("modified", "Ändrad")])
+    print_table(rows, [("id", "ID"), ("name", "Name"), ("template_uuid", "Template UUID"), ("modified", "Modified")])
 
 
 def act_list_report_templates(c, a):
@@ -997,7 +998,7 @@ def act_list_report_templates(c, a):
         try:
             default_id = c.resolve_report_template(default_ref)
         except NessusError as e:
-            log(f"VARNING: export.template_id i settings: {e}", err=True)
+            log(f"WARNING: export.template_id in settings: {e}", err=True)
     extra = [k for k in ("type", "owner", "format", "formats", "description", "templateDescription")
              if any(k in t for t in items)]
     rows = []
@@ -1008,9 +1009,9 @@ def act_list_report_templates(c, a):
             v = t.get(k, "")
             r[k] = ",".join(map(str, v)) if isinstance(v, list) else str(v)[:60]
         rows.append(r)
-    print_table(rows, [("default", "Std"), ("id", "ID"), ("name", "Namn")] + [(k, k.capitalize()) for k in extra])
+    print_table(rows, [("default", "Def"), ("id", "ID"), ("name", "Name")] + [(k, k.capitalize()) for k in extra])
     if items:
-        log("\nAnvänd med: -E SCAN -f pdf -e <ID|namn>   (Std = export.template_id i settings)")
+        log("\nUse with: -E SCAN -f pdf -e <ID|name>   (Def = export.template_id in settings)")
 
 
 def act_status(c, a):
@@ -1022,14 +1023,14 @@ def act_status(c, a):
     info = det.get("info", {})
     log(f"Scan:        {info.get('name')} (id {s['id']})")
     log(f"Status:      {info.get('status')}")
-    log(f"Mål:         {info.get('targets')}")
+    log(f"Targets:     {info.get('targets')}")
     log(f"Policy:      {info.get('policy')}")
-    log(f"Start/Slut:  {fmt_ts(info.get('scan_start'))} / {fmt_ts(info.get('scan_end'))}")
+    log(f"Start/End:   {fmt_ts(info.get('scan_start'))} / {fmt_ts(info.get('scan_end'))}")
     log(f"Hosts:       {info.get('hostcount', len(det.get('hosts') or []))}")
     sev = {4: 0, 3: 0, 2: 0, 1: 0, 0: 0}
     for v in det.get("vulnerabilities") or []:
         sev[v.get("severity", 0)] = sev.get(v.get("severity", 0), 0) + (v.get("count") or 1)
-    log(f"Fynd:        Critical {sev[4]}  High {sev[3]}  Medium {sev[2]}  Low {sev[1]}  Info {sev[0]}")
+    log(f"Findings:    Critical {sev[4]}  High {sev[3]}  Medium {sev[2]}  Low {sev[1]}  Info {sev[0]}")
 
 
 def act_list_history(c, a):
@@ -1040,28 +1041,28 @@ def act_list_history(c, a):
         return
     rows = [{"history_id": x.get("history_id"), "status": x.get("status"), "created": fmt_ts(x.get("creation_date")),
              "modified": fmt_ts(x.get("last_modification_date")), "uuid": x.get("uuid")} for x in h]
-    print_table(rows, [("history_id", "History-ID"), ("status", "Status"), ("created", "Skapad"),
-                       ("modified", "Ändrad"), ("uuid", "Scan-UUID")])
+    print_table(rows, [("history_id", "History ID"), ("status", "Status"), ("created", "Created"),
+                       ("modified", "Modified"), ("uuid", "Scan UUID")])
 
 
 def _do_exports(c, scan: dict, formats, which: str, out) -> int:
     out_dir = Path(out or c.cfg["export"]["output_dir"])
     errors = 0
     if c.report_template_ref and not set(formats) & {"html", "pdf"}:
-        log("VARNING: -e/--report-template används bara för html/pdf och ignoreras för "
+        log("WARNING: -e/--report-template only applies to html/pdf and is ignored for "
             f"{', '.join(formats)}", err=True)
     elif set(formats) & {"html", "pdf"}:
-        tid = c.effective_report_template()  # slå upp tidigt så ett felaktigt namn stoppar innan export
-        log(f"Rapportmall för html/pdf: {('id ' + str(tid)) if tid is not None else 'ingen (chapters: ' + str(c.cfg['export'].get('chapters')) + ')'}")
+        tid = c.effective_report_template()  # resolve early so a bad name stops before any export
+        log(f"Report template for html/pdf: {('id ' + str(tid)) if tid is not None else 'none (chapters: ' + str(c.cfg['export'].get('chapters')) + ')'}")
     for hid in c.pick_history(scan["id"], which):
         for fmt in formats:
             try:
-                log(f"Exporterar {fmt} för '{scan['name']}' (id {scan['id']}, history {hid or '-'}) ...")
+                log(f"Exporting {fmt} for '{scan['name']}' (id {scan['id']}, history {hid or '-'}) ...")
                 p = c.export(scan["id"], fmt, hid, out_dir, scan["name"])
-                log(f"  -> {p} ({p.stat().st_size:,} byte)")
+                log(f"  -> {p} ({p.stat().st_size:,} bytes)")
             except NessusError as e:
                 errors += 1
-                log(f"  FEL: {e}", err=True)
+                log(f"  ERROR: {e}", err=True)
     return errors
 
 
@@ -1078,11 +1079,11 @@ def act_export_formats(c, a):
 def _launch_flow(c, scan: dict, a) -> int:
     alt = parse_targets(a.alt_targets, None) or None
     scan_uuid = c.launch(scan["id"], alt)
-    log(f"Startade '{scan['name']}' (id {scan['id']}), scan_uuid {scan_uuid}")
+    log(f"Launched '{scan['name']}' (id {scan['id']}), scan_uuid {scan_uuid}")
     if not (a.wait or a.format):
         return 0
     hist = c.wait_for_scan(scan["id"], scan_uuid)
-    log(f"Scan avslutad med status: {hist.get('status')}")
+    log(f"Scan finished with status: {hist.get('status')}")
     if a.format:
         hid = hist.get("history_id")
         return 1 if _do_exports(c, scan, a.format, str(hid) if hid else "latest", a.out) else 0
@@ -1096,12 +1097,12 @@ def act_launch(c, a):
 def act_create_scan(c, a):
     targets = parse_targets(a.targets, a.targets_file)
     if not targets:
-        raise NessusError("--create-scan kräver --targets och/eller --targets-file")
+        raise NessusError("--create-scan requires --targets and/or --targets-file")
     if a.template and a.policy:
-        raise NessusError("Ange antingen --template eller --policy, inte båda")
+        raise NessusError("Give either --template or --policy, not both")
     scan = c.create_scan(a.create_scan, targets, template=a.template, policy=a.policy,
                          folder=a.folder, description=a.description or "")
-    log(f"Skapade scan '{scan.get('name', a.create_scan)}' med id {scan.get('id')}")
+    log(f"Created scan '{scan.get('name', a.create_scan)}' with id {scan.get('id')}")
     if a.launch_now or a.wait or a.format:
         return _launch_flow(c, {"id": scan["id"], "name": scan.get("name", a.create_scan)}, a)
     return 0
@@ -1111,19 +1112,19 @@ def _control(action, attr):
     def f(c, a):
         s = c.resolve_scan(getattr(a, attr))
         c.control(s["id"], action)
-        log(f"{action} skickat till '{s['name']}' (id {s['id']})")
+        log(f"{action} sent to '{s['name']}' (id {s['id']})")
     return f
 
 
 def act_delete(c, a):
     s = c.resolve_scan(a.delete)
     if not a.yes:
-        ans = input(f"Ta bort scan '{s['name']}' (id {s['id']}) inklusive historik? [j/N] ")
-        if ans.strip().lower() not in ("y", "j", "yes", "ja"):
-            log("Avbrutet.")
+        ans = input(f"Delete scan '{s['name']}' (id {s['id']}) including its history? [y/N] ")
+        if ans.strip().lower() not in ("y", "yes"):
+            log("Cancelled.")
             return 0
     c.delete_scan(s["id"])
-    log(f"Tog bort scan {s['id']}")
+    log(f"Deleted scan {s['id']}")
 
 
 def act_encode_secret(value: str) -> int:
@@ -1131,36 +1132,36 @@ def act_encode_secret(value: str) -> int:
         if not sys.stdin.isatty():
             value = sys.stdin.readline().rstrip("\n")
         else:
-            value = getpass.getpass("Hemlighet att koda: ")
-            if value != getpass.getpass("Upprepa: "):
-                log("FEL: värdena matchar inte", err=True)
+            value = getpass.getpass("Secret to encode: ")
+            if value != getpass.getpass("Repeat: "):
+                log("ERROR: the values do not match", err=True)
                 return 1
     log(base64.b64encode(value.encode("utf-8")).decode("ascii"))
     return 0
 
 
-# (dest, kort, lång, metavar|None, hjälptext, funktion)
+# (dest, short, long, metavar|None, help text, function)
 ACTIONS = [
-    ("check_connection", "-C", "--check-connection", None, "testa DNS, TCP, TLS/cert, tjänst, inloggning och rättigheter", None),
-    ("server_info", "-I", "--server-info", None, "visa serverinfo, version och licens", act_server_info),
-    ("list_scans", "-L", "--list-scans", None, "lista scans (filtrera med --folder)", act_list_scans),
-    ("list_folders", "-F", "--list-folders", None, "lista mappar", act_list_folders),
-    ("list_templates", "-T", "--list-templates", None, "lista scanmallar (för --template)", act_list_templates),
-    ("list_policies", "-P", "--list-policies", None, "lista egna policys (för --policy)", act_list_policies),
+    ("check_connection", "-C", "--check-connection", None, "test DNS, TCP, TLS/certificate, service, login and permissions", None),
+    ("server_info", "-I", "--server-info", None, "show server info, version and license", act_server_info),
+    ("list_scans", "-L", "--list-scans", None, "list scans (filter with --folder)", act_list_scans),
+    ("list_folders", "-F", "--list-folders", None, "list folders", act_list_folders),
+    ("list_templates", "-T", "--list-templates", None, "list scan templates (for --template)", act_list_templates),
+    ("list_policies", "-P", "--list-policies", None, "list custom policies (for --policy)", act_list_policies),
     ("list_report_templates", "-R", "--list-report-templates", None,
-     "lista rapportmallar för html/pdf (används med -e/--report-template)", act_list_report_templates),
-    ("list_history", "-H", "--list-history", "SCAN", "lista körningar (history_id) för en scan", act_list_history),
-    ("status", "-Q", "--status", "SCAN", "status och fyndsammanfattning för en scan", act_status),
-    ("create_scan", "-N", "--create-scan", "NAMN", "skapa ny scan (kräver --targets/--targets-file)", act_create_scan),
-    ("launch", "-S", "--launch", "SCAN", "starta en befintlig scan", act_launch),
-    ("pause", "-Z", "--pause", "SCAN", "pausa en körande scan", _control("pause", "pause")),
-    ("resume", "-U", "--resume", "SCAN", "återuppta en pausad scan", _control("resume", "resume")),
-    ("stop", "-K", "--stop", "SCAN", "stoppa en körande scan", _control("stop", "stop")),
-    ("export", "-E", "--export", "SCAN", "skapa och ladda ner rapporter (--format, --history-id, --out)", act_export),
-    ("export_formats", "-O", "--export-formats", "SCAN", "visa exportformat/kapitel som servern stödjer", act_export_formats),
-    ("delete", "-X", "--delete", "SCAN", "ta bort en scan (bekräfta eller --yes)", act_delete),
-    ("encode_secret", "-B", "--encode-secret", "VÄRDE",
-     "base64-koda ett lösenord/secret för settings.json (utan värde: fråga dolt)", None),
+     "list report templates for html/pdf (used with -e/--report-template)", act_list_report_templates),
+    ("list_history", "-H", "--list-history", "SCAN", "list runs (history_id) for a scan", act_list_history),
+    ("status", "-Q", "--status", "SCAN", "status and findings summary for a scan", act_status),
+    ("create_scan", "-N", "--create-scan", "NAME", "create a new scan (requires --targets/--targets-file)", act_create_scan),
+    ("launch", "-S", "--launch", "SCAN", "launch an existing scan", act_launch),
+    ("pause", "-Z", "--pause", "SCAN", "pause a running scan", _control("pause", "pause")),
+    ("resume", "-U", "--resume", "SCAN", "resume a paused scan", _control("resume", "resume")),
+    ("stop", "-K", "--stop", "SCAN", "stop a running scan", _control("stop", "stop")),
+    ("export", "-E", "--export", "SCAN", "generate and download reports (--format, --history-id, --out)", act_export),
+    ("export_formats", "-O", "--export-formats", "SCAN", "show export formats/chapters supported by the server", act_export_formats),
+    ("delete", "-X", "--delete", "SCAN", "delete a scan (confirm, or --yes)", act_delete),
+    ("encode_secret", "-B", "--encode-secret", "VALUE",
+     "base64-encode a password/secret for settings.json (no value: prompt hidden)", None),
 ]
 
 
@@ -1170,11 +1171,11 @@ ACTIONS = [
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="nessus_cli.py",
-        description="All-round CLI för Nessus Professional REST-API. Ange exakt en ÅTGÄRD. "
-                    "SCAN = scan-id eller exakt scannamn.",
+        description="All-round CLI for the Nessus Professional REST API. Give exactly one ACTION. "
+                    "SCAN = scan id or exact scan name.",
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
 
-    act = p.add_argument_group("Åtgärder (välj en)")
+    act = p.add_argument_group("Actions (choose one)")
     mx = act.add_mutually_exclusive_group()
     for dest, short, long_, metavar, help_, _ in ACTIONS:
         if dest == "encode_secret":
@@ -1184,37 +1185,37 @@ def build_parser() -> argparse.ArgumentParser:
         else:
             mx.add_argument(short, long_, dest=dest, action="store_true", help=help_)
 
-    g = p.add_argument_group("Scanparametrar (--create-scan / --launch)")
-    g.add_argument("-t", "--targets", metavar="MÅL", help="kommaseparerade mål (IP, CIDR, intervall, hostnamn)")
-    g.add_argument("-i", "--targets-file", metavar="FIL", help="fil med mål, ett eller flera per rad (# = kommentar)")
-    g.add_argument("-m", "--template", metavar="MALL", help="mallnamn/titel/uuid, t.ex. basic, advanced, discovery")
-    g.add_argument("-c", "--policy", metavar="POLICY", help="namn eller id på egen policy (istället för --template)")
-    g.add_argument("-g", "--folder", metavar="MAPP", help="mappnamn eller id: mål för --create-scan, filter för --list-scans, "
-                        "och avgör vilken scan som avses när samma namn finns i flera mappar")
-    g.add_argument("-n", "--description", metavar="TEXT", help="beskrivning av scannen")
-    g.add_argument("-l", "--launch-now", action="store_true", help="starta direkt efter --create-scan")
-    g.add_argument("-a", "--alt-targets", metavar="MÅL", help="kör --launch mot andra mål än de sparade")
-    g.add_argument("-w", "--wait", action="store_true", help="vänta tills scannen är klar")
+    g = p.add_argument_group("Scan parameters (--create-scan / --launch)")
+    g.add_argument("-t", "--targets", metavar="TARGETS", help="comma-separated targets (IP, CIDR, range, hostname)")
+    g.add_argument("-i", "--targets-file", metavar="FILE", help="file with targets, one or more per line (# = comment)")
+    g.add_argument("-m", "--template", metavar="TEMPLATE", help="template name/title/uuid, e.g. basic, advanced, discovery")
+    g.add_argument("-c", "--policy", metavar="POLICY", help="name or id of a custom policy (instead of --template)")
+    g.add_argument("-g", "--folder", metavar="FOLDER", help="folder name or id: destination for --create-scan, filter for --list-scans, "
+                        "and selects the scan when the same name exists in several folders")
+    g.add_argument("-n", "--description", metavar="TEXT", help="scan description")
+    g.add_argument("-l", "--launch-now", action="store_true", help="launch right after --create-scan")
+    g.add_argument("-a", "--alt-targets", metavar="TARGETS", help="run --launch against other targets than the saved ones")
+    g.add_argument("-w", "--wait", action="store_true", help="wait until the scan has finished")
 
-    e = p.add_argument_group("Export (--export, eller efter --launch/--create-scan)")
+    e = p.add_argument_group("Export (--export, or after --launch/--create-scan)")
     e.add_argument("-f", "--format", nargs="+", choices=EXPORT_FORMATS, metavar="FMT",
-                   help=f"ett eller flera av: {', '.join(EXPORT_FORMATS)}. Med --launch/--create-scan: "
-                        "vänta och exportera när scannen är klar")
+                   help=f"one or more of: {', '.join(EXPORT_FORMATS)}. With --launch/--create-scan: "
+                        "wait and export when the scan has finished")
     e.add_argument("-j", "--history-id", default="latest", metavar="ID",
-                   help="'latest' (default), 'all' eller ett specifikt history_id")
-    e.add_argument("-o", "--out", metavar="KATALOG", help="utkatalog (default export.output_dir)")
-    e.add_argument("-e", "--report-template", metavar="MALL",
-                   help="rapportmall för html/pdf: id eller namn (se -R). Går före export.template_id")
+                   help="'latest' (default), 'all' or a specific history_id")
+    e.add_argument("-o", "--out", metavar="DIR", help="output directory (default export.output_dir)")
+    e.add_argument("-e", "--report-template", metavar="TEMPLATE",
+                   help="report template for html/pdf: id or name (see -R). Takes precedence over export.template_id")
 
-    o = p.add_argument_group("Allmänt")
-    o.add_argument("-s", "--settings", metavar="FIL", default=os.environ.get("NESSUS_SETTINGS", "settings.json"),
-                   help="settings-fil (default ./settings.json eller $NESSUS_SETTINGS)")
-    o.add_argument("-k", "--insecure", action="store_true", help="hoppa över TLS-verifiering (labb)")
-    o.add_argument("-r", "--raw", action="store_true", help="skriv rå JSON från API:t istället för tabeller")
-    o.add_argument("-y", "--yes", action="store_true", help="fråga inte om bekräftelse (--delete)")
+    o = p.add_argument_group("General")
+    o.add_argument("-s", "--settings", metavar="FILE", default=os.environ.get("NESSUS_SETTINGS", "settings.json"),
+                   help="settings file (default ./settings.json or $NESSUS_SETTINGS)")
+    o.add_argument("-k", "--insecure", action="store_true", help="skip TLS verification (lab)")
+    o.add_argument("-r", "--raw", action="store_true", help="print raw JSON from the API instead of tables")
+    o.add_argument("-y", "--yes", action="store_true", help="do not ask for confirmation (--delete)")
     o.add_argument("-d", "--debug", action="store_true",
-                   help="all diagnostik: miljö, settings, alla HTTP-anrop med headers/body och svarstider "
-                        "(hemligheter maskas)")
+                   help="full diagnostics: environment, settings, every HTTP call with headers/body and response times "
+                        "(secrets are masked)")
     o.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
     return p
 
@@ -1233,10 +1234,10 @@ def main(argv=None) -> int:
     chosen = [x for x in ACTIONS if getattr(a, x[0]) not in (None, False)]
     if not chosen:
         parser.print_usage(sys.stderr)
-        log("FEL: ange en åtgärd, t.ex. --list-scans eller --check-connection (se --help)", err=True)
+        log("ERROR: give an action, e.g. --list-scans or --check-connection (see --help)", err=True)
         return 2
     dest, func = chosen[0][0], chosen[0][5]
-    debug(f"Åtgärd: {dest}")
+    debug(f"Action: {dest}")
 
     if dest == "encode_secret":
         return act_encode_secret(a.encode_secret)
@@ -1256,29 +1257,29 @@ def main(argv=None) -> int:
         client.login()
         return func(client, a) or 0
     except NessusError as e:
-        log(f"FEL: {e}", err=True)
+        log(f"ERROR: {e}", err=True)
         return 1
-    except BrokenPipeError:  # t.ex. utdata pipad till head
+    except BrokenPipeError:  # e.g. output piped to head
         try:
             sys.stdout = open(os.devnull, "w")
         except OSError:
             pass
         return 0
     except KeyboardInterrupt:
-        log("\nAvbrutet av användaren (en startad scan fortsätter på servern).", err=True)
+        log("\nInterrupted by user (a launched scan keeps running on the server).", err=True)
         return 130
     except Exception as e:
-        log(f"Oväntat fel: {type(e).__name__}: {e}", err=True)
+        log(f"Unexpected error: {type(e).__name__}: {e}", err=True)
         if DEBUG:
             import traceback
             traceback.print_exc()
         else:
-            log("Kör om med --debug för fullständig stacktrace.", err=True)
+            log("Run again with --debug for the full stack trace.", err=True)
         return 1
     finally:
         if client:
             client.logout()
-        debug(f"Total körtid: {time.perf_counter() - t0:.2f}s")
+        debug(f"Total run time: {time.perf_counter() - t0:.2f}s")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 {
-  "_kommentar": "auth.password, auth.secret_key och export.db_password ska vara base64-kodade. Skapa med: nessus_cli.py --encode-secret. export.template_id: rapportmall för html/pdf, id eller namn (lista med -R), null = använd chapters",
+  "_comment": "auth.password, auth.secret_key and export.db_password must be base64-encoded. Create them with: nessus_cli.py --encode-secret. export.template_id: report template for html/pdf, id or name (list with -R), null = use chapters",
   "url": "https://nessus.example.local:8834",
   "verify_ssl": true,
   "ca_bundle": null,

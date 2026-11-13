@@ -1,4 +1,4 @@
-# --- nessus_cli: hemligheter och kunddata ---
+# --- nessus_cli: secrets and customer data ---
 settings.json
 *.settings.json
 reports/
