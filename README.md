@@ -1,4 +1,4 @@
-# nessus_cli.py – CLI for the Nessus Professional REST API (v2.2.0)
+# nessus_cli.py – CLI for the Nessus Professional REST API (v2.3.0)
 
 Requires Python 3.6+ and `requests` 2.20+ (designed to work with the system packages on e.g. SLES 15: Python 3.6.15, requests 2.25.1, urllib3 1.25). `cryptography` is optional (adds subject/issuer/validity for unverified certificates in `--check-connection`).
 Running without arguments prints the help.
@@ -47,6 +47,7 @@ Put the value in `auth.api_token` (plain text; it is not a per-user secret). The
 | `-T` | `--list-templates` | – |
 | `-P` | `--list-policies` | – |
 | `-R` | `--list-report-templates` | – |
+| `-A` | `--list-all-templates` | – scan templates (`-T`) and report templates (`-R`) in one listing |
 | `-H` | `--list-history` | SCAN |
 | `-Q` | `--status` | SCAN |
 | `-N` | `--create-scan` | NAME |
@@ -107,10 +108,12 @@ Secrets (passwords, keys, session token, X-API-Token) are always masked, so the 
 | `json` | Local: raw data from `GET /scans/{id}` |
 
 File names: `<scanname>_<scanid>_h<historyid>_<timestamp>.<ext>`.
+When html/pdf is generated with a report template, the template name is added: `<scanname>_<scanid>_h<historyid>_<template>_<timestamp>.html`, e.g. `DMZ_5_h12_Detailed_Vulnerabilities_By_Host_20261123_154321.html`. Characters other than `A-Z a-z 0-9 . _ -` become `_`. If the template name cannot be looked up, `template<id>` is used.
 
 ## Report templates
 ```bash
-./nessus_cli.py -R                                      # list (Def = export.template_id in settings)
+./nessus_cli.py -A                                      # all templates: scan + report
+./nessus_cli.py -R                                      # report templates only (Def = export.template_id in settings)
 ./nessus_cli.py -E 42 -f pdf -e "Detailed Vulnerabilities By Host"
 ./nessus_cli.py -E 42 -f pdf html -e 17
 ./nessus_cli.py -S "Customer X DMZ" -f pdf -e "My Company Report" -o ./reports
@@ -124,6 +127,7 @@ File names: `<scanname>_<scanid>_h<historyid>_<timestamp>.<ext>`.
 0 = OK, 1 = error (including failures in `--check-connection`), 2 = no action given / scan not `completed`, 130 = interrupted.
 
 ## Changes
+- `-A/--list-all-templates`; report template name added to html/pdf file names (v2.3.0)
 - All output, help texts, comments and docs in English (v2.2.0)
 - `-e/--report-template` (id or name), clearer `-R`, template name allowed in `export.template_id` (v2.1.0)
 - Compatible with Python 3.6 (SLES 15, RHEL 8 etc.) (v2.0.3)
