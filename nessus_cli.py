@@ -4,7 +4,7 @@
 # Name:          nessus_cli.py
 # Description:   All-round CLI for the Nessus Professional REST API
 # Author:        Lars Niklasson
-# Version:       2.3.1
+# Version:       2.4.0
 # Last modified: 2026-11-23
 # Requires:      Python 3.6+, requests 2.20+ (cryptography optional)
 # Tested with:   Nessus Professional 10.12
@@ -12,6 +12,8 @@
 # License:       MIT (see LICENSE)
 #
 # Changelog:
+#   2.4.0  2026-11-23  New file names: all fields separated by "---", scan run time
+#                      added, unique suffix (export time + random hex) per export
 #   2.3.1  2026-11-23  Template name in file names delimited by "---"
 #   2.3.0  2026-11-23  -A/--list-all-templates (scan + report templates);
 #                      report template name added to html/pdf file names
@@ -60,6 +62,7 @@ import logging
 import os
 import platform
 import re
+import secrets
 import socket
 import ssl
 import stat
@@ -76,7 +79,7 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("The 'requests' module is missing: pip install requests")
 
-__version__ = "2.3.1"
+__version__ = "2.4.0"
 
 if sys.version_info < (3, 6):  # pragma: no cover
     sys.exit("nessus_cli.py requires Python 3.6 or later")
@@ -313,6 +316,7 @@ class NessusClient:
         self.report_template_ref = None  # set from -e/--report-template
         self._rt_cache = {}
         self._rt_names = {}  # report template id -> name, for file names
+        self._hist_cache = {}  # scan id -> history, for run times in file names
         debug(f"Client: url={self.url} verify={self.verify} timeout={self.timeout}s "
               f"proxies={requests.utils.get_environ_proxies(self.url) or 'none'}")
 
@@ -703,22 +707,45 @@ class NessusClient:
         return picked
 
     # ---- export -----------------------------------------------------------
+    def run_time(self, scan_id: int, history_id) -> Optional[int]:
+        """Start time (epoch) of the scan run behind history_id; latest run if history_id is None."""
+        if scan_id not in self._hist_cache:
+            try:
+                self._hist_cache[scan_id] = self.history(scan_id)
+            except NessusError as e:
+                debug(f"Could not read history for scan {scan_id}: {e}")
+                self._hist_cache[scan_id] = []
+        hist = self._hist_cache[scan_id]
+        if history_id is not None:
+            hist = [h for h in hist if str(h.get("history_id")) == str(history_id)]
+        ts = hist[0].get("creation_date") if hist else None
+        return int(ts) if ts else None
+
+    def report_filename(self, scan_id: int, scan_name: str, history_id, fmt: str, tid: Optional[int]) -> str:
+        """<scan>---<scanid>---h<historyid>[---<template>]---run<YYYYmmdd_HHMM>---<exported>_<random>.<ext>
+
+        '---' separates the fields; '---' inside a field is shortened to '-' so the name splits cleanly.
+        The last field (export time + random hex) makes every export unique, even for the same run."""
+        def part(v) -> str:
+            return re.sub(r"-{3,}", "-", safe_name(str(v)))
+        rt = self.run_time(scan_id, history_id)
+        fields = [part(scan_name), str(scan_id), f"h{history_id}" if history_id else "hlatest"]
+        if tid is not None:
+            fields.append(part(self.report_template_name(tid)))
+        fields.append("run" + (datetime.fromtimestamp(rt).strftime("%Y%m%d_%H%M") if rt else "unknown"))
+        fields.append(datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + secrets.token_hex(3))
+        name = "---".join(fields) + "." + FILE_EXT[fmt]
+        debug(f"File name: {name}")
+        return name
+
     def export_formats(self, scan_id: int):
         return self.get(f"/scans/{scan_id}/export/formats")
 
     def export(self, scan_id: int, fmt: str, history_id, out_dir: Path, scan_name: str) -> Path:
         ecfg = self.cfg["export"]
         out_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        hpart = f"_h{history_id}" if history_id else ""
         tid = self.effective_report_template() if fmt in ("html", "pdf") else None
-        if tid is not None:
-            # "---" marks the template name; collapse any "---" inside the name so it splits cleanly
-            tname = re.sub(r"-{3,}", "-", safe_name(self.report_template_name(tid)))
-            sep = f"---{tname}---"
-        else:
-            sep = "_"
-        target = out_dir / f"{safe_name(scan_name)}_{scan_id}{hpart}{sep}{stamp}.{FILE_EXT[fmt]}"
+        target = out_dir / self.report_filename(scan_id, scan_name, history_id, fmt, tid)
 
         if fmt == "json":
             data = self.scan_details(scan_id, history_id)

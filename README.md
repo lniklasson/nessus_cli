@@ -1,4 +1,4 @@
-# nessus_cli.py – CLI for the Nessus Professional REST API (v2.3.1)
+# nessus_cli.py – CLI for the Nessus Professional REST API (v2.4.0)
 
 Requires Python 3.6+ and `requests` 2.20+ (designed to work with the system packages on e.g. SLES 15: Python 3.6.15, requests 2.25.1, urllib3 1.25). `cryptography` is optional (adds subject/issuer/validity for unverified certificates in `--check-connection`).
 Running without arguments prints the help.
@@ -107,8 +107,23 @@ Secrets (passwords, keys, session token, X-API-Token) are always masked, so the 
 | `db` | Encrypted, requires `export.db_password` (base64) |
 | `json` | Local: raw data from `GET /scans/{id}` |
 
-File names: `<scanname>_<scanid>_h<historyid>_<timestamp>.<ext>`.
-When html/pdf is generated with a report template, the template name is added between `---` markers: `<scanname>_<scanid>_h<historyid>---<template>---<timestamp>.html`, e.g. `DMZ_5_h12---Detailed_Vulnerabilities_By_Host---20261123_154321.html`. The markers make the name easy to split out (`---` inside a template name is shortened to `-`). Characters other than `A-Z a-z 0-9 . _ -` become `_`. If the template name cannot be looked up, `template<id>` is used.
+File names – all fields separated by `---`:
+```
+<scanname>---<scanid>---h<historyid>[---<template>]---run<YYYYmmdd_HHMM>---<exported YYYYmmdd_HHMMSS>_<random>.<ext>
+
+DMZ---18---h96---Detailed_Vulnerabilities_By_Host---run20261120_1405---20261123_165816_9e0545.html
+DMZ---18---h96---run20261120_1405---20261123_165816_f07142.csv
+```
+| Field | Meaning |
+|---|---|
+| scan name | Characters other than `A-Z a-z 0-9 . _ -` become `_` |
+| scan id | The scan's id in Nessus (column ID in `-L`) |
+| `h<historyid>` | The scan run the report is based on (see `-H SCAN`); `hlatest` if the scan has no history |
+| template | Only for html/pdf generated with a report template |
+| `run…` | When that scan run started (`creation_date` in the history), local time; `rununknown` if not available |
+| last field | Export time + 6 random hex characters, so exporting the same run again always creates a new file |
+
+`---` inside a field (e.g. a template name) is shortened to `-`, so the name always splits cleanly: `awk -F'---' '{print $3}'`. Note that the template field only exists for html/pdf with a template, so count fields from the end or match `run…` when parsing.
 
 ## Report templates
 ```bash
@@ -127,6 +142,7 @@ When html/pdf is generated with a report template, the template name is added be
 0 = OK, 1 = error (including failures in `--check-connection`), 2 = no action given / scan not `completed`, 130 = interrupted.
 
 ## Changes
+- New file names: all fields separated by `---`, scan run time added, unique suffix per export (v2.4.0)
 - Template name in file names delimited by `---` (v2.3.1)
 - `-A/--list-all-templates`; report template name added to html/pdf file names (v2.3.0)
 - All output, help texts, comments and docs in English (v2.2.0)
