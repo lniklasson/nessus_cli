@@ -4,7 +4,7 @@
 # Name:          nessus_cli.py
 # Description:   All-round CLI for the Nessus Professional REST API
 # Author:        Lars Niklasson
-# Version:       2.3.0
+# Version:       2.3.1
 # Last modified: 2026-11-23
 # Requires:      Python 3.6+, requests 2.20+ (cryptography optional)
 # Tested with:   Nessus Professional 10.12
@@ -12,6 +12,7 @@
 # License:       MIT (see LICENSE)
 #
 # Changelog:
+#   2.3.1  2026-11-23  Template name in file names delimited by "---"
 #   2.3.0  2026-11-23  -A/--list-all-templates (scan + report templates);
 #                      report template name added to html/pdf file names
 #   2.2.0  2026-11-13  All output, help texts, comments and docs in English
@@ -75,7 +76,7 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("The 'requests' module is missing: pip install requests")
 
-__version__ = "2.3.0"
+__version__ = "2.3.1"
 
 if sys.version_info < (3, 6):  # pragma: no cover
     sys.exit("nessus_cli.py requires Python 3.6 or later")
@@ -711,8 +712,13 @@ class NessusClient:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         hpart = f"_h{history_id}" if history_id else ""
         tid = self.effective_report_template() if fmt in ("html", "pdf") else None
-        tpart = f"_{safe_name(self.report_template_name(tid))}" if tid is not None else ""
-        target = out_dir / f"{safe_name(scan_name)}_{scan_id}{hpart}{tpart}_{stamp}.{FILE_EXT[fmt]}"
+        if tid is not None:
+            # "---" marks the template name; collapse any "---" inside the name so it splits cleanly
+            tname = re.sub(r"-{3,}", "-", safe_name(self.report_template_name(tid)))
+            sep = f"---{tname}---"
+        else:
+            sep = "_"
+        target = out_dir / f"{safe_name(scan_name)}_{scan_id}{hpart}{sep}{stamp}.{FILE_EXT[fmt]}"
 
         if fmt == "json":
             data = self.scan_details(scan_id, history_id)

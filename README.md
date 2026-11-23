@@ -1,4 +1,4 @@
-# nessus_cli.py – CLI for the Nessus Professional REST API (v2.3.0)
+# nessus_cli.py – CLI for the Nessus Professional REST API (v2.3.1)
 
 Requires Python 3.6+ and `requests` 2.20+ (designed to work with the system packages on e.g. SLES 15: Python 3.6.15, requests 2.25.1, urllib3 1.25). `cryptography` is optional (adds subject/issuer/validity for unverified certificates in `--check-connection`).
 Running without arguments prints the help.
@@ -108,7 +108,7 @@ Secrets (passwords, keys, session token, X-API-Token) are always masked, so the 
 | `json` | Local: raw data from `GET /scans/{id}` |
 
 File names: `<scanname>_<scanid>_h<historyid>_<timestamp>.<ext>`.
-When html/pdf is generated with a report template, the template name is added: `<scanname>_<scanid>_h<historyid>_<template>_<timestamp>.html`, e.g. `DMZ_5_h12_Detailed_Vulnerabilities_By_Host_20261123_154321.html`. Characters other than `A-Z a-z 0-9 . _ -` become `_`. If the template name cannot be looked up, `template<id>` is used.
+When html/pdf is generated with a report template, the template name is added between `---` markers: `<scanname>_<scanid>_h<historyid>---<template>---<timestamp>.html`, e.g. `DMZ_5_h12---Detailed_Vulnerabilities_By_Host---20261123_154321.html`. The markers make the name easy to split out (`---` inside a template name is shortened to `-`). Characters other than `A-Z a-z 0-9 . _ -` become `_`. If the template name cannot be looked up, `template<id>` is used.
 
 ## Report templates
 ```bash
@@ -127,6 +127,7 @@ When html/pdf is generated with a report template, the template name is added: `
 0 = OK, 1 = error (including failures in `--check-connection`), 2 = no action given / scan not `completed`, 130 = interrupted.
 
 ## Changes
+- Template name in file names delimited by `---` (v2.3.1)
 - `-A/--list-all-templates`; report template name added to html/pdf file names (v2.3.0)
 - All output, help texts, comments and docs in English (v2.2.0)
 - `-e/--report-template` (id or name), clearer `-R`, template name allowed in `export.template_id` (v2.1.0)
