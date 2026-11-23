@@ -4,14 +4,16 @@
 # Name:          nessus_cli.py
 # Description:   All-round CLI for the Nessus Professional REST API
 # Author:        Lars Niklasson
-# Version:       2.2.0
-# Last modified: 2026-11-13
+# Version:       2.3.0
+# Last modified: 2026-11-23
 # Requires:      Python 3.6+, requests 2.20+ (cryptography optional)
 # Tested with:   Nessus Professional 10.12
 # Repo:          https://github.com/lniklasson/nessus_cli
 # License:       MIT (see LICENSE)
 #
 # Changelog:
+#   2.3.0  2026-11-23  -A/--list-all-templates (scan + report templates);
+#                      report template name added to html/pdf file names
 #   2.2.0  2026-11-13  All output, help texts, comments and docs in English
 #   2.1.0  2026-11-12  -e/--report-template (id or name), clearer -R,
 #                      template name allowed in export.template_id
@@ -73,7 +75,7 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("The 'requests' module is missing: pip install requests")
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 
 if sys.version_info < (3, 6):  # pragma: no cover
     sys.exit("nessus_cli.py requires Python 3.6 or later")
@@ -309,6 +311,7 @@ class NessusClient:
         self.scan_folder = None   # set from -g/--folder, used to resolve scan names
         self.report_template_ref = None  # set from -e/--report-template
         self._rt_cache = {}
+        self._rt_names = {}  # report template id -> name, for file names
         debug(f"Client: url={self.url} verify={self.verify} timeout={self.timeout}s "
               f"proxies={requests.utils.get_environ_proxies(self.url) or 'none'}")
 
@@ -553,7 +556,13 @@ class NessusClient:
             tid = int(hits[0]["id"])
         debug(f"Report template '{key}' -> id {tid}" + (f" ({hits[0].get('name')})" if hits else ""))
         self._rt_cache[key] = tid
+        if hits and hits[0].get("name"):
+            self._rt_names[tid] = str(hits[0]["name"])
         return tid
+
+    def report_template_name(self, tid: int) -> str:
+        """Name of a resolved report template; 'template<id>' if the name is unknown."""
+        return self._rt_names.get(tid) or f"template{tid}"
 
     def effective_report_template(self) -> Optional[int]:
         """-e/--report-template takes precedence over export.template_id in settings (both may be id or name)."""
@@ -701,7 +710,9 @@ class NessusClient:
         out_dir.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         hpart = f"_h{history_id}" if history_id else ""
-        target = out_dir / f"{safe_name(scan_name)}_{scan_id}{hpart}_{stamp}.{FILE_EXT[fmt]}"
+        tid = self.effective_report_template() if fmt in ("html", "pdf") else None
+        tpart = f"_{safe_name(self.report_template_name(tid))}" if tid is not None else ""
+        target = out_dir / f"{safe_name(scan_name)}_{scan_id}{hpart}{tpart}_{stamp}.{FILE_EXT[fmt]}"
 
         if fmt == "json":
             data = self.scan_details(scan_id, history_id)
@@ -710,7 +721,6 @@ class NessusClient:
 
         body = {"format": fmt}
         if fmt in ("html", "pdf"):
-            tid = self.effective_report_template()
             if tid is not None:
                 body["template_id"] = tid
             else:
@@ -1014,6 +1024,25 @@ def act_list_report_templates(c, a):
         log("\nUse with: -E SCAN -f pdf -e <ID|name>   (Def = export.template_id in settings)")
 
 
+def act_list_all_templates(c, a):
+    """Scan templates (-T) and report templates (-R) in one listing."""
+    if a.raw:
+        out = {"scan_templates": c.templates()}
+        try:
+            out["report_templates"] = c.report_templates()
+        except NessusError as e:
+            out["report_templates_error"] = str(e)
+        log(pretty(out))
+        return
+    log("== Scan templates (use with -m/--template) ==")
+    act_list_templates(c, a)
+    log("\n== Report templates for html/pdf (use with -e/--report-template) ==")
+    try:
+        act_list_report_templates(c, a)
+    except NessusError as e:
+        log(f"WARNING: could not list report templates: {e}", err=True)
+
+
 def act_status(c, a):
     s = c.resolve_scan(a.status)
     det = c.scan_details(s["id"])
@@ -1148,6 +1177,8 @@ ACTIONS = [
     ("list_folders", "-F", "--list-folders", None, "list folders", act_list_folders),
     ("list_templates", "-T", "--list-templates", None, "list scan templates (for --template)", act_list_templates),
     ("list_policies", "-P", "--list-policies", None, "list custom policies (for --policy)", act_list_policies),
+    ("list_all_templates", "-A", "--list-all-templates", None,
+     "list all templates: scan templates (-T) and report templates (-R)", act_list_all_templates),
     ("list_report_templates", "-R", "--list-report-templates", None,
      "list report templates for html/pdf (used with -e/--report-template)", act_list_report_templates),
     ("list_history", "-H", "--list-history", "SCAN", "list runs (history_id) for a scan", act_list_history),
